@@ -13,7 +13,6 @@ program
     .command('create')
     .description('从线上仓库生成项目到当前目录（不包含 .git）')
     .action(async () => {
-        const repo = 'windcannons/vue3Template'; // degit 方式不需要 direct:
         const currentDir = process.cwd();
 
         // 检查当前目录是否为空
@@ -22,10 +21,36 @@ program
             return;
         }
 
-        const spinner = ora('正在生成项目，请稍候...').start(); // 显示 loading
+        // 选择框架
+        const { framework } = await inquirer.prompt([
+            {
+                type: 'list',
+                name: 'framework',
+                message: '请选择项目框架:',
+                choices: ['Vue', 'Nuxt3', 'UniApp'],
+            }
+        ]);
+
+        let repoUrl = '';
+        switch (framework) {
+            case 'Vue':
+                repoUrl = 'https://github.com/windcannons/vue3Template.git';
+                break;
+            case 'Nuxt3':
+                repoUrl = 'https://github.com/windcannons/nuxt3Template.git';
+                break;
+            case 'UniApp':
+                repoUrl = 'https://github.com/windcannons/uniappTemplate.git';
+                break;
+            default:
+                console.error('未知框架');
+                return;
+        }
+
+        const spinner = ora('正在生成项目，请稍候...').start();
 
         try {
-            const emitter = degit(repo, { cache: false, force: true });
+            const emitter = degit(repoUrl, { cache: false, force: true });
             await emitter.clone(currentDir);
             spinner.succeed(`项目已成功生成到当前目录: ${currentDir}`);
         } catch (err) {
