@@ -1,0 +1,31 @@
+{
+  "name": "lchao-cli",
+  "version": "1.0.22",
+  "description": "chao的脚手架",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "lchao": "bin/cli.js"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/windcannons/chao-cli.git"
+  },
+  "keywords": [
+    "cli"
+  ],
+  "author": "lchao",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/windcannons/chao-cli/issues"
+  },
+  "homepage": "https://github.com/windcannons/chao-cli#readme",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "degit": "^2.8.4",
+    "ora": "^8.2.0"
+  }
+}
