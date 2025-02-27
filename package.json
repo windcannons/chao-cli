@@ -26,6 +26,7 @@
   "dependencies": {
     "commander": "^13.1.0",
     "degit": "^2.8.4",
+    "inquirer": "^12.4.2",
     "ora": "^8.2.0"
   }
 }
