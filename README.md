@@ -10,7 +10,7 @@
 lchao create
 ```
 
-**描述：** 选择项目框架（Vue3、Nuxt3、UniApp）生成项目到当前目录）。
+**描述：** 选择项目框架（Vue3、Nuxt3、UniApp）生成项目到当前目录。
 
 
 
