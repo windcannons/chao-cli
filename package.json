@@ -1,6 +1,6 @@
 {
   "name": "lchao-cli",
-  "version": "1.0.34",
+  "version": "1.0.38",
   "description": "chao的脚手架",
   "main": "index.js",
   "type": "module",
@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/windcannons/chao-cli#readme",
   "dependencies": {
+    "axios": "^1.8.4",
     "commander": "^13.1.0",
     "degit": "^2.8.4",
     "inquirer": "^12.4.2",
