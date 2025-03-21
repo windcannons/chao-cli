@@ -63,5 +63,6 @@ lchao ls
   lchao create - 生成新项目到当前目录
   lchao clear  - 清理当前目录下的 node_modules 和 package-lock.json
   lchao bind git - 绑定线上仓库地址到当前项目
+  lchao create - 生成 API 请求文件
   lchao ls     - 显示当前支持的指令列表
 ```
