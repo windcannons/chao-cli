@@ -231,7 +231,7 @@ program
                     throw new Error('请求地址为空，请先绑定请求地址');
                 }
 
-                apiUrl = `${requestUrl}v2/api-docs`;
+                apiUrl = `${requestUrl}/v2/api-docs`;
             } else {
                 // 如果 index.json 文件不存在，生成默认的 index.json 文件
                 const defaultIndexJson = { requestUrl: '' };
