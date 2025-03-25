@@ -204,10 +204,11 @@ program
 
 // 创建 API 请求文件夹和文件指令
 program
-    .command('create-api')
+    .command('create-api-uni')
     .description('根据输入的请求地址生成 API 请求文件夹、文件以及 TypeScript 接口文档')
     .action(async () => {
         const currentDir = process.cwd(); // 当前工作目录
+        const typingsDir = path.join(currentDir, 'src', 'services', 'list');
         const createApiDir = path.join(currentDir, 'createApi');
         const indexJsonPath = path.join(createApiDir, 'index.json');
 
@@ -242,27 +243,8 @@ program
             const response = await axios.get(apiUrl);
             const apiData = response.data;
 
-            // 停止 spinner，等待用户选择
-            spinner.stop();
-
-            // 选择生成 uniapp 或 vue3 的 API 代码
-            const { framework } = await inquirer.prompt([
-                {
-                    type: 'list',
-                    name: 'framework',
-                    message: '请选择要生成的框架类型',
-                    choices: ['uniapp', 'vue3']
-                }
-            ]);
-
-            // 重新启动 spinner
-            spinner.start();
-
-            if (framework === 'uniapp') {
-                generateTsInterfacesVue(apiData, currentDir);
-            } else if (framework === 'vue3') {
-                generateTsInterfaces(apiData, currentDir);
-            }
+            // 生成 TypeScript 接口文档
+            generateTsInterfacesVue(apiData, currentDir);
 
             spinner.succeed('API 请求文件夹和文件已成功生成');
         } catch (err) {
@@ -279,6 +261,7 @@ function generateTsInterfacesVue(apiData, currentDir) {
     fs.mkdirSync(tsDir, { recursive: true });
 
     const tags = apiData.tags || [];
+    console.log(tags)
     const paths = apiData.paths || {};
     const definitions = apiData.definitions || {};
 
@@ -399,10 +382,10 @@ function generateTsInterfacesVue(apiData, currentDir) {
 
                     if (method === 'get') {
                         tsContent += `    ${functionName}: (data: any) => {\n`;
-                        tsContent += `        return Request.get(\${path}?${new URLSearchParams(data)})\n`;
+                        tsContent += `        return Request.get(\`${path}?${new URLSearchParams(data)}\`)\n`;
                     } else if (method === 'post') {
                         tsContent += `    ${functionName}: (data: any) => {\n`;
-                        tsContent += `        return Request.post(\${path}, data)\n`;
+                        tsContent += `        return Request.post(\`${path}\`, data)\n`;
                     }
 
                     tsContent += `    },\n`;
@@ -418,7 +401,61 @@ function generateTsInterfacesVue(apiData, currentDir) {
 
         fs.writeFileSync(tsFilePath, tsContent);
     });
+
 }
+
+program
+    .command('create-api-vue')
+    .description('根据输入的请求地址生成 API 请求文件夹、文件以及 TypeScript 接口文档')
+    .action(async () => {
+        const currentDir = process.cwd(); // 当前工作目录
+        const typingsDir = path.join(currentDir, 'src', 'services', 'list');
+        const createApiDir = path.join(currentDir, 'createApi');
+        const indexJsonPath = path.join(createApiDir, 'index.json');
+
+        const spinner = ora('正在生成 API 请求文件夹和文件，请稍候...').start();
+
+        try {
+            // 确保 createApi 文件夹存在
+            fs.mkdirSync(createApiDir, { recursive: true });
+
+            let requestUrl;
+            let apiUrl;
+
+            // 检查 index.json 文件是否存在
+            if (fs.existsSync(indexJsonPath)) {
+                // 读取 index.json 文件
+                const indexJson = JSON.parse(fs.readFileSync(indexJsonPath, 'utf8'));
+                requestUrl = indexJson.requestUrl;
+
+                if (!requestUrl || requestUrl.trim() === '') {
+                    throw new Error('请求地址为空，请先绑定请求地址');
+                }
+
+                apiUrl = `${requestUrl}/v2/api-docs`;
+            } else {
+                // 如果 index.json 文件不存在，生成默认的 index.json 文件
+                const defaultIndexJson = { requestUrl: '' };
+                fs.writeFileSync(indexJsonPath, JSON.stringify(defaultIndexJson, null, 2));
+                throw new Error('请求地址为空，请先绑定请求地址');
+            }
+
+            // 获取 API 数据
+            const response = await axios.get(apiUrl);
+            const apiData = response.data;
+
+            // 生成 TypeScript 接口文档
+            generateTsInterfaces(apiData, currentDir);
+
+            spinner.succeed('API 请求文件夹和文件已成功生成');
+        } catch (err) {
+            spinner.fail('生成 API 请求文件夹和文件失败');
+            console.error('错误详情:', err.message);
+            if (err.message.includes('请求地址为空')) {
+                console.error('请在 createApi/index.json 文件中绑定请求地址。');
+            }
+        }
+    });
 
 function generateTsInterfaces(apiData, currentDir) {
     const jsDir = path.join(currentDir, 'src', 'axios', 'list');
@@ -485,7 +522,7 @@ function generateTsInterfaces(apiData, currentDir) {
                     jsContent += `    // Parameters: ${comments}\n`;
                     jsContent += `    ${functionName}: (data) => {\n`;
                     if (method === 'get') {
-                        jsContent += `        return requests.get('${path}?${new URLSearchParams(data)}');\n`;
+                        jsContent += `        return requests.get(\`\${'${path}'}?\${new URLSearchParams(data)}\`);\n`;
                     } else {
                         jsContent += `        return requests.${method}('${path}', data);\n`;
                     }
@@ -503,6 +540,7 @@ function generateTsInterfaces(apiData, currentDir) {
         fs.writeFileSync(jsFilePath, jsContent);
     });
 }
+
 
 
 // 显示支持的指令列表
