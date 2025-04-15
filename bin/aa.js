@@ -204,7 +204,7 @@ program
 
 // 创建 API 请求文件夹和文件指令
 program
-    .command('create-api-uni')
+    .command('create-api')
     .description('根据输入的请求地址生成 API 请求文件夹、文件以及 TypeScript 接口文档')
     .action(async () => {
         const currentDir = process.cwd(); // 当前工作目录
@@ -244,7 +244,7 @@ program
             const apiData = response.data;
 
             // 生成 TypeScript 接口文档
-            generateTsInterfacesVue(apiData, currentDir);
+            generateTsInterfaces(apiData, currentDir);
 
             spinner.succeed('API 请求文件夹和文件已成功生成');
         } catch (err) {
@@ -256,7 +256,7 @@ program
         }
     });
 
-function generateTsInterfacesVue(apiData, currentDir) {
+function generateTsInterfaces(apiData, currentDir) {
     const tsDir = path.join(currentDir, 'src', 'apis');
     fs.mkdirSync(tsDir, { recursive: true });
 
@@ -330,6 +330,7 @@ function generateTsInterfacesVue(apiData, currentDir) {
                         const prop = paramDef.properties[key];
                         const isRequired = paramDef.required?.includes(key);
 
+                        // 使用类型映射表转换类型
                         const mappedType = typeMapping[prop.type] || 'any';
 
                         const comment = `${key}: ${prop.description || ''}`;
@@ -343,6 +344,7 @@ function generateTsInterfacesVue(apiData, currentDir) {
                 const isRequired = param.required;
                 const comment = `${param.name}: ${param.description || ''}`;
 
+                // 使用类型映射表转换类型
                 const mappedType = typeMapping[param.type] || 'any';
                 const type = `${param.name}${isRequired ? '' : '?'}: ${mappedType}`;
 
@@ -360,149 +362,8 @@ function generateTsInterfacesVue(apiData, currentDir) {
     tags.forEach(tag => {
         const tagName = tag.name;
         const tagEnglishName = toCamelCase(tag.description.replace('Controller', '').trim());
-        const tsFilePath = path.join(tsDir, `${tagEnglishName}Controller.ts`);
-        let tsContent = `import Request from "../services/request";\n\n// ${tag.description}\nexport const ${tagEnglishName}Controller = {\n`;
-
-        for (const path in paths) {
-            const pathItem = paths[path];
-            const operations = pathItem.get || pathItem.post || pathItem.put || pathItem.delete;
-
-            if (operations && operations.tags && operations.tags.includes(tagName)) {
-                const functionName = generateFunctionNameFromPath(path);
-                const summary = operations.summary || 'No description';
-                const parameters = operations.parameters || [];
-                const method = Object.keys(pathItem)[0] || 'get';
-
-                const { comments, types } = generateParamsInfo(parameters);
-
-                tsContent += `    // ${summary}\n`;
-
-                if (parameters.length > 0) {
-                    tsContent += `    // Parameters: ${comments}\n`;
-
-                    if (method === 'get') {
-                        tsContent += `    ${functionName}: (data: any) => {\n`;
-                        tsContent += `        return Request.get(\`${path}?${new URLSearchParams(data)}\`)\n`;
-                    } else if (method === 'post') {
-                        tsContent += `    ${functionName}: (data: any) => {\n`;
-                        tsContent += `        return Request.post(\`${path}\`, data)\n`;
-                    }
-
-                    tsContent += `    },\n`;
-                } else {
-                    tsContent += `    ${functionName}: () => {\n`;
-                    tsContent += `        return Request.${method}('${path}')\n`;
-                    tsContent += `    },\n`;
-                }
-            }
-        }
-
-        tsContent += `};\n`;
-
-        fs.writeFileSync(tsFilePath, tsContent);
-    });
-
-}
-
-program
-    .command('create-api-vue')
-    .description('根据输入的请求地址生成 API 请求文件夹、文件以及 TypeScript 接口文档')
-    .action(async () => {
-        const currentDir = process.cwd(); // 当前工作目录
-        const typingsDir = path.join(currentDir, 'src', 'services', 'list');
-        const createApiDir = path.join(currentDir, 'createApi');
-        const indexJsonPath = path.join(createApiDir, 'index.json');
-
-        const spinner = ora('正在生成 API 请求文件夹和文件，请稍候...').start();
-
-        try {
-            // 确保 createApi 文件夹存在
-            fs.mkdirSync(createApiDir, { recursive: true });
-
-            let requestUrl;
-            let apiUrl;
-
-            // 检查 index.json 文件是否存在
-            if (fs.existsSync(indexJsonPath)) {
-                // 读取 index.json 文件
-                const indexJson = JSON.parse(fs.readFileSync(indexJsonPath, 'utf8'));
-                requestUrl = indexJson.requestUrl;
-
-                if (!requestUrl || requestUrl.trim() === '') {
-                    throw new Error('请求地址为空，请先绑定请求地址');
-                }
-
-                apiUrl = `${requestUrl}/v2/api-docs`;
-            } else {
-                // 如果 index.json 文件不存在，生成默认的 index.json 文件
-                const defaultIndexJson = { requestUrl: '' };
-                fs.writeFileSync(indexJsonPath, JSON.stringify(defaultIndexJson, null, 2));
-                throw new Error('请求地址为空，请先绑定请求地址');
-            }
-
-            // 获取 API 数据
-            const response = await axios.get(apiUrl);
-            const apiData = response.data;
-
-            // 生成 TypeScript 接口文档
-            generateTsInterfaces(apiData, currentDir);
-
-            spinner.succeed('API 请求文件夹和文件已成功生成');
-        } catch (err) {
-            spinner.fail('生成 API 请求文件夹和文件失败');
-            console.error('错误详情:', err.message);
-            if (err.message.includes('请求地址为空')) {
-                console.error('请在 createApi/index.json 文件中绑定请求地址。');
-            }
-        }
-    });
-
-function generateTsInterfaces(apiData, currentDir) {
-    const jsDir = path.join(currentDir, 'src', 'axios', 'list');
-    fs.mkdirSync(jsDir, { recursive: true });
-
-    const tags = apiData.tags || [];
-    const paths = apiData.paths || {};
-
-    // 用于将字符串转换为小驼峰命名
-    function toCamelCase(str) {
-        return str
-            .replace(/-([a-z])/g, (match, letter) => letter.toUpperCase()) // 替换短横线为大写字母
-            .replace(/(?:^\w|[A-Z])/g, (char, index) => index === 0 ? char.toLowerCase() : char.toUpperCase())
-            .replace(/\W/g, '');
-    }
-
-    // 用于从路径中生成接口函数名
-    function generateFunctionNameFromPath(path) {
-        const pathSegments = path.split('/').filter(segment => segment !== '');
-        const lastSegment = pathSegments.pop(); // 最后一个段
-        const secondLastSegment = pathSegments.pop() || ''; // 倒数第二个段
-
-        // 处理单词中原本的大写字母和短横线
-        const lastSegmentCamelCase = toCamelCase(lastSegment);
-        const secondLastSegmentCamelCase = toCamelCase(secondLastSegment);
-
-        // 拼接函数名，确保倒数第二个单词的首字母大写
-        return `${lastSegmentCamelCase}${secondLastSegmentCamelCase.charAt(0).toUpperCase()}${secondLastSegmentCamelCase.slice(1)}Api`;
-    }
-
-    // 用于生成参数注释
-    function generateParamsInfo(parameters) {
-        const paramComments = [];
-
-        parameters.forEach(param => {
-            const comment = `${param.name}: ${param.description || ''}`;
-            paramComments.push(comment);
-        });
-
-        return paramComments.join(', ');
-    }
-
-    tags.forEach(tag => {
-        const tagName = tag.name;
-        const tagEnglishName = toCamelCase(tag.description.replace('Controller', '').trim());
-        const jsFilePath = path.join(jsDir, `${tagEnglishName}Controller.js`); // 添加 Controller 后缀
-        let jsContent = `import requests from "@/axios/axios";\n\n// ${tag.description}\nexport const ${tagEnglishName}Controller = {\n`; // 添加 Controller 后缀
+        const tsFilePath = path.join(tsDir, `${tagEnglishName}Controller.ts`); // 添加 Controller 后缀
+        let tsContent = `import Request from "../services/request";\n\n// ${tag.description}\nexport const ${tagEnglishName}Controller = {\n`; // 添加 Controller 后缀
 
         for (const path in paths) {
             const pathItem = paths[path];
@@ -514,34 +375,29 @@ function generateTsInterfaces(apiData, currentDir) {
                 const parameters = operations.parameters || [];
                 const method = Object.keys(pathItem)[0] || 'get';
 
-                const comments = generateParamsInfo(parameters);
+                const { comments, types } = generateParamsInfo(parameters);
 
-                jsContent += `    // ${summary}\n`;
+                tsContent += `    // ${summary}\n`;
 
                 if (parameters.length > 0) {
-                    jsContent += `    // Parameters: ${comments}\n`;
-                    jsContent += `    ${functionName}: (data) => {\n`;
-                    if (method === 'get') {
-                        jsContent += `        return requests.get(\`\${'${path}'}?\${new URLSearchParams(data)}\`);\n`;
-                    } else {
-                        jsContent += `        return requests.${method}('${path}', data);\n`;
-                    }
+                    tsContent += `    // Parameters: ${comments}\n`;
+                    //tsContent += `    ${functionName}: (data: { ${types} }) => {\n`;
+                    tsContent += `    ${functionName}: (data: any) => {\n`;
+                    tsContent += `        return Request.${method}('${path}', data)\n`;
                 } else {
-                    jsContent += `    ${functionName}: () => {\n`;
-                    jsContent += `        return requests.${method}('${path}');\n`;
+                    tsContent += `    ${functionName}: () => {\n`;
+                    tsContent += `        return Request.${method}('${path}')\n`;
                 }
 
-                jsContent += `    },\n`;
+                tsContent += `    },\n`;
             }
         }
 
-        jsContent += `};\n`;
+        tsContent += `};\n`;
 
-        fs.writeFileSync(jsFilePath, jsContent);
+        fs.writeFileSync(tsFilePath, tsContent);
     });
 }
-
-
 
 // 显示支持的指令列表
 program

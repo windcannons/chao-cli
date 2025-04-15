@@ -230,7 +230,7 @@ program
                     throw new Error('请求地址为空，请先绑定请求地址');
                 }
 
-                apiUrl = `${requestUrl}/v2/api-docs`;
+                apiUrl = `${requestUrl}`;
             } else {
                 // 如果 index.json 文件不存在，生成默认的 index.json 文件
                 const defaultIndexJson = { requestUrl: '' };
@@ -242,27 +242,8 @@ program
             const response = await axios.get(apiUrl);
             const apiData = response.data;
 
-            // 停止 spinner，等待用户选择
-            spinner.stop();
-
-            // 选择生成 uniapp 或 vue3 的 API 代码
-            const { framework } = await inquirer.prompt([
-                {
-                    type: 'list',
-                    name: 'framework',
-                    message: '请选择要生成的框架类型',
-                    choices: ['uniapp', 'vue3']
-                }
-            ]);
-
-            // 重新启动 spinner
-            spinner.start();
-
-            if (framework === 'uniapp') {
-                generateTsInterfacesVue(apiData, currentDir);
-            } else if (framework === 'vue3') {
-                generateTsInterfaces(apiData, currentDir);
-            }
+            // 生成 TypeScript 接口文档
+            generateTsInterfaces(apiData, currentDir);
 
             spinner.succeed('API 请求文件夹和文件已成功生成');
         } catch (err) {
@@ -274,8 +255,8 @@ program
         }
     });
 
-function generateTsInterfacesVue(apiData, currentDir) {
-    const tsDir = path.join(currentDir, 'src', 'apis');
+function generateTsInterfaces(apiData, currentDir) {
+    const tsDir = path.join(currentDir, 'src', 'api', 'modules');
     fs.mkdirSync(tsDir, { recursive: true });
 
     const tags = apiData.tags || [];
@@ -310,200 +291,170 @@ function generateTsInterfacesVue(apiData, currentDir) {
         any: 'any' // 通用类型
     };
 
-    // 用于将字符串转换为小驼峰命名
-    function toCamelCase(str) {
-        return str
-            .replace(/-([a-z])/g, (match, letter) => letter.toUpperCase()) // 替换短横线为大写字母
-            .replace(/(?:^\w|[A-Z])/g, (char, index) => index === 0 ? char.toLowerCase() : char.toUpperCase())
-            .replace(/\W/g, '');
-    }
 
-    // 用于从路径中生成接口函数名
-    function generateFunctionNameFromPath(path) {
-        const pathSegments = path.split('/').filter(segment => segment !== '');
-        const lastSegment = pathSegments.pop(); // 最后一个段
-        const secondLastSegment = pathSegments.pop() || ''; // 倒数第二个段
+    tags.forEach((tag, index) => {
+        const tagName = tag.name;
+        if (formatString(tagName)) {
+            const tsFilePath = path.join(tsDir, `${formatString(tagName)}.ts`); // 添加 Controller 后缀
+            let tsContent =
+                `import Request
+    from "@/services/request";
 
-        // 处理单词中原本的大写字母和短横线
-        const lastSegmentCamelCase = toCamelCase(lastSegment);
-        const secondLastSegmentCamelCase = toCamelCase(secondLastSegment);
+/**
+ * @name ${tag.name}
+ */
 
-        // 拼接函数名，确保倒数第二个单词的首字母大写
-        return `${lastSegmentCamelCase}${secondLastSegmentCamelCase.charAt(0).toUpperCase()}${secondLastSegmentCamelCase.slice(1)}Api`;
-    }
+export const ${formatString(tagName)} = {
+`; // 添加 Controller 后缀
 
-    // 用于生成参数注释和类型标注
-    function generateParamsInfo(parameters) {
-        const paramComments = [];
-        const paramTypes = [];
+            //console.log(paths)
+            for (const path in paths) {
+                //每个接口地址
+                const pathItem = paths[path];
+                //console.log(pathItem)
+                //每个请求方式
+                for (const method in pathItem) {
+                    const item = pathItem[method]
+                    if (item.tags.includes(tagName)) {
+                        tsContent +=
+                            `    // ${item.summary}${item.description?` - ${item.description}`:''}
+    //直达链接 :${item['x-run-in-apifox']}
+`;
+                        //parameters参数
+                        let queryInfo = ``
+                        //注释
+                        let remark = ``
 
-        parameters.forEach(param => {
-            if (param.schema?.$ref) {
-                const refName = param.schema.$ref.split('/').pop();
-                const paramDef = definitions[refName];
+                        item.parameters.forEach(i => {
+                            queryInfo +=
+                                `       '${i.name}'${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
+`
+                            remark += `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   `
+                        })
 
-                if (paramDef) {
-                    Object.keys(paramDef.properties).forEach(key => {
-                        const prop = paramDef.properties[key];
-                        const isRequired = paramDef.required?.includes(key);
+                        if (findSchemaValue(item).required) {
+                            for (const key in findSchemaValue(item).properties) {
+                                let i = findSchemaValue(item).properties[key]
+                                queryInfo +=
+                                    `       '${key}'${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  // ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   
+`
+                            }
+                    }
 
-                        const mappedType = typeMapping[prop.type] || 'any';
+                        let requestName = formatString(path) + method.charAt(0).toUpperCase() + method.slice(1).toLowerCase()
+                        if (queryInfo) {
+                            //有参数
+                            if (path.includes('{') || path.includes('}')){
+                                //路径传参
+                                tsContent +=
+                                    `    ${requestName}: (${extractVariablesAndFormatPath(path).variables}: {
+`
+                                tsContent +=
+                                    `   }) => {
+        return Request.${method}(\`${extractVariablesAndFormatPath(path).formattedPath}\`);   ${remark}
+    },
+                            
+`
+                            }else{
+                                //普通传参
+                                tsContent +=
+                                    `    ${requestName}: (data: {
+`
+                                tsContent += queryInfo
+                                tsContent +=
+                                    `   }) => {
+        return Request.${method}(\`${path}\`,data);
+    },
+                            
+`
+                            }
 
-                        const comment = `${key}: ${prop.description || ''}`;
-                        const type = `${key}${isRequired ? '' : '?'}: ${mappedType}`;
+                        }else{
+                            tsContent +=
+                                `    ${requestName}: () => {
+        return Request.${method}(\`${path}\`);
+    },
+    
+`
+                        }
 
-                        paramComments.push(comment);
-                        paramTypes.push(type);
-                    });
                 }
-            } else {
-                const isRequired = param.required;
-                const comment = `${param.name}: ${param.description || ''}`;
 
-                const mappedType = typeMapping[param.type] || 'any';
-                const type = `${param.name}${isRequired ? '' : '?'}: ${mappedType}`;
-
-                paramComments.push(comment);
-                paramTypes.push(type);
+                }
             }
+
+            tsContent += `};\n`;
+
+            fs.writeFileSync(tsFilePath, tsContent);
+        }
+    });
+
+
+    function extractVariablesAndFormatPath(path) {
+        // 使用正则表达式匹配花括号内的内容
+        const regex = /{([^}]+)}/g;
+        let match;
+        const variables = [];
+        const formattedPath = path.replace(regex, (match, variable) => {
+            variables.push(variable);
+            return `\${${variable}}`;
         });
 
+        // 将变量名数组转换为逗号和空格分隔的字符串
+        const variablesString = variables.join(', ');
+
         return {
-            comments: paramComments.join(', '),
-            types: paramTypes.join(', ')
+            variables: variablesString,
+            formattedPath: formattedPath
         };
     }
 
-    tags.forEach(tag => {
-        const tagName = tag.name;
-        const tagEnglishName = toCamelCase(tag.description.replace('Controller', '').trim());
-        const tsFilePath = path.join(tsDir, `${tagEnglishName}Controller.ts`);
-        let tsContent = `import Request from "../services/request";\n\n// ${tag.description}\nexport const ${tagEnglishName}Controller = {\n`;
+    function formatString(input) {
+        // 使用正则表达式提取所有英文单词
+        const words = input.match(/[a-zA-Z]+/g) || [];
 
-        for (const path in paths) {
-            const pathItem = paths[path];
-            const operations = pathItem.get || pathItem.post || pathItem.put || pathItem.delete;
-
-            if (operations && operations.tags && operations.tags.includes(tagName)) {
-                const functionName = generateFunctionNameFromPath(path);
-                const summary = operations.summary || 'No description';
-                const parameters = operations.parameters || [];
-                const method = Object.keys(pathItem)[0] || 'get';
-
-                const { comments, types } = generateParamsInfo(parameters);
-
-                tsContent += `    // ${summary}\n`;
-
-                if (parameters.length > 0) {
-                    tsContent += `    // Parameters: ${comments}\n`;
-
-                    if (method === 'get') {
-                        tsContent += `    ${functionName}: (data: any) => {\n`;
-                        tsContent += `        return Request.get(\${path}?${new URLSearchParams(data)})\n`;
-                    } else if (method === 'post') {
-                        tsContent += `    ${functionName}: (data: any) => {\n`;
-                        tsContent += `        return Request.post(\${path}, data)\n`;
-                    }
-
-                    tsContent += `    },\n`;
-                } else {
-                    tsContent += `    ${functionName}: () => {\n`;
-                    tsContent += `        return Request.${method}('${path}')\n`;
-                    tsContent += `    },\n`;
-                }
+        // 将除了第一个单词以外的单词首字母大写
+        const formattedWords = words.map((word, index) => {
+            if (index === 0) {
+                return word.toLowerCase(); // 第一个单词全部小写
             }
-        }
-
-        tsContent += `};\n`;
-
-        fs.writeFileSync(tsFilePath, tsContent);
-    });
-}
-
-function generateTsInterfaces(apiData, currentDir) {
-    const jsDir = path.join(currentDir, 'src', 'axios', 'list');
-    fs.mkdirSync(jsDir, { recursive: true });
-
-    const tags = apiData.tags || [];
-    const paths = apiData.paths || {};
-
-    // 用于将字符串转换为小驼峰命名
-    function toCamelCase(str) {
-        return str
-            .replace(/-([a-z])/g, (match, letter) => letter.toUpperCase()) // 替换短横线为大写字母
-            .replace(/(?:^\w|[A-Z])/g, (char, index) => index === 0 ? char.toLowerCase() : char.toUpperCase())
-            .replace(/\W/g, '');
-    }
-
-    // 用于从路径中生成接口函数名
-    function generateFunctionNameFromPath(path) {
-        const pathSegments = path.split('/').filter(segment => segment !== '');
-        const lastSegment = pathSegments.pop(); // 最后一个段
-        const secondLastSegment = pathSegments.pop() || ''; // 倒数第二个段
-
-        // 处理单词中原本的大写字母和短横线
-        const lastSegmentCamelCase = toCamelCase(lastSegment);
-        const secondLastSegmentCamelCase = toCamelCase(secondLastSegment);
-
-        // 拼接函数名，确保倒数第二个单词的首字母大写
-        return `${lastSegmentCamelCase}${secondLastSegmentCamelCase.charAt(0).toUpperCase()}${secondLastSegmentCamelCase.slice(1)}Api`;
-    }
-
-    // 用于生成参数注释
-    function generateParamsInfo(parameters) {
-        const paramComments = [];
-
-        parameters.forEach(param => {
-            const comment = `${param.name}: ${param.description || ''}`;
-            paramComments.push(comment);
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); // 其余单词首字母大写
         });
 
-        return paramComments.join(', ');
+        // 拼接成最终的字符串
+        return formattedWords.join('');
     }
 
-    tags.forEach(tag => {
-        const tagName = tag.name;
-        const tagEnglishName = toCamelCase(tag.description.replace('Controller', '').trim());
-        const jsFilePath = path.join(jsDir, `${tagEnglishName}Controller.js`); // 添加 Controller 后缀
-        let jsContent = `import requests from "@/axios/axios";\n\n// ${tag.description}\nexport const ${tagEnglishName}Controller = {\n`; // 添加 Controller 后缀
+    function findSchemaValue(obj) {
+        // 如果输入不是对象或数组，直接返回 undefined
+        if (typeof obj !== 'object' || obj === null) {
+            return undefined;
+        }
 
-        for (const path in paths) {
-            const pathItem = paths[path];
-            const operations = pathItem.get || pathItem.post || pathItem.put || pathItem.delete;
+        // 如果当前对象有键为 'schema'，直接返回其值
+        if (obj.hasOwnProperty('schema')) {
+            return obj.schema;
+        }
 
-            if (operations && operations.tags && operations.tags.includes(tagName)) {
-                const functionName = generateFunctionNameFromPath(path); // 从路径生成函数名
-                const summary = operations.summary || 'No description';
-                const parameters = operations.parameters || [];
-                const method = Object.keys(pathItem)[0] || 'get';
-
-                const comments = generateParamsInfo(parameters);
-
-                jsContent += `    // ${summary}\n`;
-
-                if (parameters.length > 0) {
-                    jsContent += `    // Parameters: ${comments}\n`;
-                    jsContent += `    ${functionName}: (data) => {\n`;
-                    if (method === 'get') {
-                        jsContent += `        return requests.get('${path}?${new URLSearchParams(data)}');\n`;
-                    } else {
-                        jsContent += `        return requests.${method}('${path}', data);\n`;
+        // 遍历对象的每个属性
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                const value = obj[key];
+                // 如果属性值是对象或数组，递归查找
+                if (typeof value === 'object' && value !== null) {
+                    const result = findSchemaValue(value);
+                    if (result !== undefined) {
+                        return result; // 如果找到，直接返回结果
                     }
-                } else {
-                    jsContent += `    ${functionName}: () => {\n`;
-                    jsContent += `        return requests.${method}('${path}');\n`;
                 }
-
-                jsContent += `    },\n`;
             }
         }
 
-        jsContent += `};\n`;
+        // 如果遍历完都没有找到，返回 undefined
+        return undefined;
+    }
 
-        fs.writeFileSync(jsFilePath, jsContent);
-    });
 }
-
 
 // 显示支持的指令列表
 program
