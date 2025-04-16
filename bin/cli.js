@@ -241,6 +241,10 @@ program
             // 获取 API 数据
             const response = await axios.get(apiUrl);
             const apiData = response.data;
+            if (!apiData){
+                spinner.fail('requestUrl地址错误');
+                return
+            }
 
             // 生成 TypeScript 接口文档
             generateTsInterfaces(apiData, currentDir);
@@ -259,9 +263,10 @@ function generateTsInterfaces(apiData, currentDir) {
     const tsDir = path.join(currentDir, 'src', 'api', 'modules');
     fs.mkdirSync(tsDir, { recursive: true });
 
+    //请求目录数组
     const tags = apiData.tags || [];
+    //请求详情数组
     const paths = apiData.paths || {};
-    const definitions = apiData.definitions || {};
 
     // 类型映射表：将后端类型映射为前端 TypeScript 类型
     const typeMapping = {
@@ -298,7 +303,7 @@ function generateTsInterfaces(apiData, currentDir) {
             const tsFilePath = path.join(tsDir, `${formatString(tagName)}.ts`); // 添加 Controller 后缀
             let tsContent =
                 `import Request
-    from "@/services/request";
+  from "@/services/request";
 
 /**
  * @name ${tag.name}
@@ -317,8 +322,8 @@ export const ${formatString(tagName)} = {
                     const item = pathItem[method]
                     if (item.tags.includes(tagName)) {
                         tsContent +=
-                            `    // ${item.summary}${item.description?` - ${item.description}`:''}
-    //直达链接 :${item['x-run-in-apifox']}
+                            `  // ${item.summary}${item.description?` - ${item.description}`:''}
+  //直达链接 :${item['x-run-in-apifox']}
 `;
                         //parameters参数
                         let queryInfo = ``
@@ -327,7 +332,7 @@ export const ${formatString(tagName)} = {
 
                         item.parameters.forEach(i => {
                             queryInfo +=
-                                `       '${i.name}'${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
+                                `    ${/-/.test(i.name)?"'":""}${i.name}${/-/.test(i.name)?"'":""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
 `
                             remark += `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   `
                         })
@@ -336,7 +341,7 @@ export const ${formatString(tagName)} = {
                             for (const key in findSchemaValue(item).properties) {
                                 let i = findSchemaValue(item).properties[key]
                                 queryInfo +=
-                                    `       '${key}'${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  // ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   
+                                    `    ${/-/.test(key)?"'":""}${key}${/-/.test(key)?"'":""}${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  // ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   
 `
                             }
                     }
@@ -347,31 +352,31 @@ export const ${formatString(tagName)} = {
                             if (path.includes('{') || path.includes('}')){
                                 //路径传参
                                 tsContent +=
-                                    `    ${requestName}: (${extractVariablesAndFormatPath(path).variables}: {
+                                    `  ${requestName}: (${extractVariablesAndFormatPath(path).variables}: {
 `
                                 tsContent +=
-                                    `   }) => {
-        return Request.${method}(\`${extractVariablesAndFormatPath(path).formattedPath}\`);   ${remark}
-    },
+                                    `  }) => {
+    return Request.${method}(\`${extractVariablesAndFormatPath(path).formattedPath}\`);   ${remark}
+  },
                             
 `
                             }else{
                                 //普通传参
                                 tsContent +=
-                                    `    ${requestName}: (data: {
+                                    `  ${requestName}: (data: {
 `
                                 tsContent += queryInfo
                                 tsContent +=
-                                    `   }) => {
-        return Request.${method}(\`${path}\`,data);
-    },
+                                    `  }) => {
+    return Request.${method}(\`${path}\`, data);
+  },
                             
 `
                             }
 
                         }else{
                             tsContent +=
-                                `    ${requestName}: () => {
+                                `  ${requestName}: () => {
         return Request.${method}(\`${path}\`);
     },
     
