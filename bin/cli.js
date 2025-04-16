@@ -344,7 +344,7 @@ export const ${formatString(tagName)} = {
                                     `    ${/-/.test(key)?"'":""}${key}${/-/.test(key)?"'":""}${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  // ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   
 `
                             }
-                    }
+                        }
 
                         let requestName = formatString(path) + method.charAt(0).toUpperCase() + method.slice(1).toLowerCase()
                         if (queryInfo) {
@@ -352,11 +352,8 @@ export const ${formatString(tagName)} = {
                             if (path.includes('{') || path.includes('}')){
                                 //路径传参
                                 tsContent +=
-                                    `  ${requestName}: (${extractVariablesAndFormatPath(path).variables}: {
-`
-                                tsContent +=
-                                    `  }) => {
-    return Request.${method}(\`${extractVariablesAndFormatPath(path).formattedPath}\`);   ${remark}
+                                    `  ${requestName}: (${extractVariablesAndFormatPath(path,item).variables}) => {
+    return Request.${method}(\`${extractVariablesAndFormatPath(path,item).formattedPath}\`);   ${remark}
   },
                             
 `
@@ -395,22 +392,22 @@ export const ${formatString(tagName)} = {
     });
 
 
-    function extractVariablesAndFormatPath(path) {
+    function extractVariablesAndFormatPath(path,info) {
         // 使用正则表达式匹配花括号内的内容
         const regex = /{([^}]+)}/g;
-        let match;
-        const variables = [];
+        let variables = '';
         const formattedPath = path.replace(regex, (match, variable) => {
-            variables.push(variable);
             return `\${${variable}}`;
         });
 
-        // 将变量名数组转换为逗号和空格分隔的字符串
-        const variablesString = variables.join(', ');
+        info.parameters.forEach(i => {
+                variables += `${i.name}: ${typeMapping[i.schema.type]} ,`
+        })
 
+        const variablesString = variables.slice(0, -2)
         return {
             variables: variablesString,
-            formattedPath: formattedPath
+            formattedPath
         };
     }
 
