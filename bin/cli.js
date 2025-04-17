@@ -288,10 +288,11 @@ async function hasDirectory(dirPath) {
 }
 
 function generateTsInterfaces(apiData, currentDir,hasSrcDir, isTsSyntax) {
+    let tsDir
     if (hasSrcDir){
-        const tsDir = path.join(currentDir, 'src', 'api', 'list');
+        tsDir = path.join(currentDir, 'src', 'api', 'list');
     }else{
-        const tsDir = path.join(currentDir, 'api', 'list');
+        tsDir = path.join(currentDir, 'api', 'list');
     }
 
     fs.mkdirSync(tsDir, { recursive: true });
@@ -355,8 +356,8 @@ export const ${formatString(tagName)} = {
                     const item = pathItem[method]
                     if (item.tags.includes(tagName)) {
                         tsContent +=
-                            `  // ${item.summary}${item.description ? ` - ${item?.description}` : ''}
-${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
+                            `    // ${item.summary}${item.description ? ` - ${item?.description}` : ''}
+${item['x-run-in-apifox'] ? `    //直达链接 :${item['x-run-in-apifox']}` : ''}
 `;
                         //parameters参数
                         let queryInfo = ``
@@ -364,17 +365,23 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
                         let remark = ``
                         //注释 key+中文名+示例
                         let keyRemark = ``
+                        let num = 0
 
-                        item.parameters.forEach(i => {
-                            //ts语法
-                            if (isTsSyntax) {
+                        item.parameters.forEach((i, index) => {
                                 queryInfo +=
-                                    `    ${/-/.test(i.name) ? "'" : ""}${i.name}${/-/.test(i.name) ? "'" : ""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
+                                    `        ${/-/.test(i.name) ? "'" : ""}${i.name}${/-/.test(i.name) ? "'" : ""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
+`
+                            //js备注
+                            if (index) {
+                                keyRemark +=
+                                    `    // ${i.name}: ${typeMapping[i.schema.type]} ${i.description}${i.examples ? `   示例:${i.examples}` : ''}
 `
                             } else {
-                                //js语法
-                                keyRemark += `// ${i.name}: ${i.description}${i.examples ? `   示例:${i.examples}` : ''}`
+                                keyRemark +=
+                                    `// ${i.name}: ${typeMapping[i.schema.type]} ${i.description}${i.examples ? `   示例:${i.examples}` : ''}
+`
                             }
+
 
                             remark += `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}`
                         })
@@ -382,16 +389,20 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
                         if (findSchemaValue(item).required) {
                             for (const key in findSchemaValue(item).properties) {
                                 let i = findSchemaValue(item).properties[key]
-                                //ts语法
-                                if (isTsSyntax) {
                                     queryInfo +=
-                                        `    ${/-/.test(key) ? "'" : ""}${key}${/-/.test(key) ? "'" : ""}${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  ${i.description ? `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}` : ''}   
+                                        `        ${/-/.test(key) ? "'" : ""}${key}${/-/.test(key) ? "'" : ""}${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  ${i.description ? `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}` : ''}
+`
+                                //js备注
+                                if (num) {
+                                    keyRemark +=
+                                        `    // ${key}: ${typeMapping[i.type]} ${i.description}${i.examples ? `   示例:${i.examples}` : ''}
 `
                                 } else {
-                                    //js语法
-                                    keyRemark += `// ${key}: ${i.description}${i.examples ? `   示例:${i.examples}` : ''}`
+                                    keyRemark +=
+                                        `// ${key}: ${typeMapping[i.type]} ${i.description}${i.examples ? `   示例:${i.examples}` : ''}
+`
                                 }
-
+                                num++
                             }
                         }
 
@@ -404,15 +415,16 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
                                 //ts语法
                                 if (isTsSyntax){
                                     tsContent +=
-                                        `  ${requestName}: (${extractVariablesAndFormatPath(path,item).variables}) => {
+                                        `    ${requestName}: (${extractVariablesAndFormatPath(path, item).variables}) => {
     return Request.${method}(\`${extractVariablesAndFormatPath(path, item).formattedPath}\`);   ${remark.includes('undefined') ? '' : remark}
   },
 
 `
                                 }else{
                                     tsContent +=
-                                        `  ${requestName}: (${extractVariablesAndFormatPath(path,item).variables}) => {
-    return Request.${method}(\`${extractVariablesAndFormatPath(path, item).formattedPath}\`);   ${remark.includes('undefined') ? '' : remark}
+                                        `    ${keyRemark.slice(0, -1)}
+${requestName}: (${extractVariablesAndFormatPath(path, item).jsDateString}) => {
+    return Request.${method}(\`${extractVariablesAndFormatPath(path, item).formattedPath}\`);
   },
 
 `
@@ -422,7 +434,7 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
                                 //ts语法
                                 if (isTsSyntax){
                                     tsContent +=
-                                        `  ${requestName}: (data: {
+                                        `    ${requestName}: (data: {
 `
                                     tsContent += queryInfo
                                     tsContent +=
@@ -434,8 +446,9 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
                                 }else{
                                 //js语法
                                     tsContent +=
-                                        `  ${requestName}: (data) => {
-    return Request.${method}(\`${path}\`, data);
+                                        `    ${keyRemark.slice(0, -1)}
+    ${requestName}: (data) => {
+        return Request.${method}(\`${path}\`, data);
   },
 
 `
@@ -446,7 +459,7 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
                         }else{
                             //无参数
                             tsContent +=
-                                `  ${requestName}: () => {
+                                `    ${requestName}: () => {
         return Request.${method}(\`${path}\`);
     },
     
@@ -473,12 +486,17 @@ ${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
             return `\${${variable}}`;
         });
 
+        let jsDate = ''
+
         info.parameters.forEach(i => {
                 variables += `${i.name}: ${typeMapping[i.schema.type]} ,`
+            jsDate += `${i.name} ,`
         })
 
+        const jsDateString = jsDate.slice(0, -2)
         const variablesString = variables.slice(0, -2)
         return {
+            jsDateString,
             variables: variablesString,
             formattedPath
         };
