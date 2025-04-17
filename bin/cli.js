@@ -369,7 +369,7 @@ ${item['x-run-in-apifox'] ? `    //直达链接 :${item['x-run-in-apifox']}` : '
 
                         item.parameters.forEach((i, index) => {
                                 queryInfo +=
-                                    `        ${/-/.test(i.name) ? "'" : ""}${i.name}${/-/.test(i.name) ? "'" : ""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
+                                    `        ${/-/.test(i.name) ? "'" : ""}${i.name}${/-/.test(i.name) ? "'" : ""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}  // ${i.description}
 `
                             //js备注
                             if (index) {
