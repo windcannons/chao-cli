@@ -50,7 +50,7 @@ program
                 repoUrl = 'https://github.com/windcannons/nuxt3Template.git';
                 break;
             case 'UniApp':
-                repoUrl = 'https://github.com/windcannons/uniappTemplate.git';
+                repoUrl = 'https://github.com/windcannons/newUniTemplate.git';
                 break;
             default:
                 console.error('未知框架');
@@ -211,6 +211,13 @@ program
         const createApiDir = path.join(currentDir, 'createApi');
         const indexJsonPath = path.join(createApiDir, 'index.json');
 
+        // 检查是否存在 src 文件夹
+        const srcDirPath = path.join(currentDir, 'src');
+        const hasSrcDir = await hasDirectory(srcDirPath)
+
+        //是否为ts语法
+        const isTsSyntax = await hasTsFileInDir(currentDir);
+
         const spinner = ora('正在生成 API 请求文件夹和文件，请稍候...').start();
 
         try {
@@ -247,7 +254,7 @@ program
             }
 
             // 生成 TypeScript 接口文档
-            generateTsInterfaces(apiData, currentDir);
+            generateTsInterfaces(apiData, currentDir,hasSrcDir, isTsSyntax);
 
             spinner.succeed('API 请求文件夹和文件已成功生成');
         } catch (err) {
@@ -259,8 +266,34 @@ program
         }
     });
 
-function generateTsInterfaces(apiData, currentDir) {
-    const tsDir = path.join(currentDir, 'src', 'api', 'modules');
+// 异步函数，用于检查目录中是否存在 .ts 文件
+async function hasTsFileInDir(dir) {
+    try {
+        const files = await fs.promises.readdir(dir); // 读取目录内容
+        return files.some(file => path.extname(file) === '.ts'); // 检查是否有 .ts 文件
+    } catch (error) {
+        console.error('读取目录时发生错误：', error.message);
+        return false;
+    }
+}
+// 异步函数，用于检查路径是否存在且是一个目录
+async function hasDirectory(dirPath) {
+    try {
+        const stats = await fs.promises.stat(dirPath); // 获取路径的状态信息
+        return stats.isDirectory(); // 检查是否是目录
+    } catch (error) {
+        // 如果路径不存在，stat 会抛出错误
+        return false;
+    }
+}
+
+function generateTsInterfaces(apiData, currentDir,hasSrcDir, isTsSyntax) {
+    if (hasSrcDir){
+        const tsDir = path.join(currentDir, 'src', 'api', 'list');
+    }else{
+        const tsDir = path.join(currentDir, 'api', 'list');
+    }
+
     fs.mkdirSync(tsDir, { recursive: true });
 
     //请求目录数组
@@ -300,10 +333,10 @@ function generateTsInterfaces(apiData, currentDir) {
     tags.forEach((tag, index) => {
         const tagName = tag.name;
         if (formatString(tagName)) {
-            const tsFilePath = path.join(tsDir, `${formatString(tagName)}.ts`); // 添加 Controller 后缀
+            const tsFilePath = path.join(tsDir, `${formatString(tagName)}.${isTsSyntax ? 'ts' : 'js'}`); // 添加 Controller 后缀
             let tsContent =
                 `import Request
-  from "@/services/request";
+  from "../request";
 
 /**
  * @name ${tag.name}
@@ -322,56 +355,96 @@ export const ${formatString(tagName)} = {
                     const item = pathItem[method]
                     if (item.tags.includes(tagName)) {
                         tsContent +=
-                            `  // ${item.summary}${item.description?` - ${item.description}`:''}
-  //直达链接 :${item['x-run-in-apifox']}
+                            `  // ${item.summary}${item.description ? ` - ${item?.description}` : ''}
+${item['x-run-in-apifox'] ? `  //直达链接 :${item['x-run-in-apifox']}` : ''}
 `;
                         //parameters参数
                         let queryInfo = ``
-                        //注释
+                        //注释 中文名+示例
                         let remark = ``
+                        //注释 key+中文名+示例
+                        let keyRemark = ``
 
                         item.parameters.forEach(i => {
-                            queryInfo +=
-                                `    ${/-/.test(i.name)?"'":""}${i.name}${/-/.test(i.name)?"'":""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
+                            //ts语法
+                            if (isTsSyntax) {
+                                queryInfo +=
+                                    `    ${/-/.test(i.name) ? "'" : ""}${i.name}${/-/.test(i.name) ? "'" : ""}${i.required ? ':' : '?:'} ${typeMapping[i.schema.type]}
 `
-                            remark += `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   `
+                            } else {
+                                //js语法
+                                keyRemark += `// ${i.name}: ${i.description}${i.examples ? `   示例:${i.examples}` : ''}`
+                            }
+
+                            remark += `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}`
                         })
 
                         if (findSchemaValue(item).required) {
                             for (const key in findSchemaValue(item).properties) {
                                 let i = findSchemaValue(item).properties[key]
-                                queryInfo +=
-                                    `    ${/-/.test(key)?"'":""}${key}${/-/.test(key)?"'":""}${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  // ${i.description}${i.examples ? `   示例:${i.examples}` : ''}   
+                                //ts语法
+                                if (isTsSyntax) {
+                                    queryInfo +=
+                                        `    ${/-/.test(key) ? "'" : ""}${key}${/-/.test(key) ? "'" : ""}${findSchemaValue(item).required.includes(key) ? ':' : '?:'} ${typeMapping[i.type]}  ${i.description ? `// ${i.description}${i.examples ? `   示例:${i.examples}` : ''}` : ''}   
 `
+                                } else {
+                                    //js语法
+                                    keyRemark += `// ${key}: ${i.description}${i.examples ? `   示例:${i.examples}` : ''}`
+                                }
+
                             }
                         }
 
                         let requestName = formatString(path) + method.charAt(0).toUpperCase() + method.slice(1).toLowerCase()
+
+                        //有参数
                         if (queryInfo) {
-                            //有参数
+                            //路径传参
                             if (path.includes('{') || path.includes('}')){
-                                //路径传参
-                                tsContent +=
-                                    `  ${requestName}: (${extractVariablesAndFormatPath(path,item).variables}) => {
-    return Request.${method}(\`${extractVariablesAndFormatPath(path,item).formattedPath}\`);   ${remark}
+                                //ts语法
+                                if (isTsSyntax){
+                                    tsContent +=
+                                        `  ${requestName}: (${extractVariablesAndFormatPath(path,item).variables}) => {
+    return Request.${method}(\`${extractVariablesAndFormatPath(path, item).formattedPath}\`);   ${remark.includes('undefined') ? '' : remark}
   },
-                            
+
 `
+                                }else{
+                                    tsContent +=
+                                        `  ${requestName}: (${extractVariablesAndFormatPath(path,item).variables}) => {
+    return Request.${method}(\`${extractVariablesAndFormatPath(path, item).formattedPath}\`);   ${remark.includes('undefined') ? '' : remark}
+  },
+
+`
+                                }
                             }else{
                                 //普通传参
-                                tsContent +=
-                                    `  ${requestName}: (data: {
+                                //ts语法
+                                if (isTsSyntax){
+                                    tsContent +=
+                                        `  ${requestName}: (data: {
 `
-                                tsContent += queryInfo
-                                tsContent +=
-                                    `  }) => {
+                                    tsContent += queryInfo
+                                    tsContent +=
+                                        `  }) => {
     return Request.${method}(\`${path}\`, data);
   },
-                            
+
 `
+                                }else{
+                                //js语法
+                                    tsContent +=
+                                        `  ${requestName}: (data) => {
+    return Request.${method}(\`${path}\`, data);
+  },
+
+`
+                                }
+
                             }
 
                         }else{
+                            //无参数
                             tsContent +=
                                 `  ${requestName}: () => {
         return Request.${method}(\`${path}\`);
