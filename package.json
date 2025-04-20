@@ -8,7 +8,8 @@
     "lchao": "bin/cli.js"
   },
   "scripts": {
-    "test": "jest"
+    "link": "npm link",
+    "publish": "npm publish"
   },
   "repository": {
     "type": "git",
