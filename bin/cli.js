@@ -1,22 +1,12 @@
 #!/usr/bin/env node
-import {
-    program
-} from 'commander';
-import fs
-    from 'fs';
-import path
-    from 'path';
-import degit
-    from 'degit';
-import ora
-    from 'ora'; // 引入 ora 进行 loading 效果
-import {
-    execSync
-} from 'child_process'; // 引入 child_process 执行系统命令
-import inquirer
-    from 'inquirer';
-import axios
-    from 'axios'; // 引入 axios 用于请求 API 文档
+import {program} from 'commander';
+import fs from 'fs';
+import path from 'path';
+import degit from 'degit';
+import ora from 'ora'; // 引入 ora 进行 loading 效果
+import {execSync} from 'child_process'; // 引入 child_process 执行系统命令
+import inquirer from 'inquirer';
+import axios from 'axios'; // 引入 axios 用于请求 API 文档
 
 // 创建项目指令
 program
@@ -432,26 +422,45 @@ ${requestName}: (${extractVariablesAndFormatPath(path, item).jsDateString}) => {
                             }else{
                                 //普通传参
                                 //ts语法
-                                if (isTsSyntax){
+                                if (isTsSyntax) {
                                     tsContent +=
                                         `    ${requestName}: (data: {
 `
                                     tsContent += queryInfo
-                                    tsContent +=
-                                        `  }) => {
+                                    if (method === 'get') {
+                                        tsContent +=
+                                            `  }) => {
+     return Request.${method}(\`${path}${"?${new URLSearchParams(data)}"}\`);
+  },
+
+`
+                                    } else {
+                                        tsContent +=
+                                            `  }) => {
     return Request.${method}(\`${path}\`, data);
   },
 
 `
-                                }else{
-                                //js语法
-                                    tsContent +=
-                                        `    ${keyRemark.slice(0, -1)}
+                                    }
+                                } else {
+                                    //js语法
+                                    if (method === 'get') {
+                                        tsContent += `
+    ${keyRemark.slice(0, -1)}
+    ${requestName}: (data) => {
+        return Request.${method}(\`${path}${"?${new URLSearchParams(data)}"}\`);
+    },
+    
+`
+                                    } else {
+                                        tsContent +=
+                                            `    ${keyRemark.slice(0, -1)}
     ${requestName}: (data) => {
         return Request.${method}(\`${path}\`, data);
   },
 
 `
+                                    }
                                 }
 
                             }
