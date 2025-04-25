@@ -1,6 +1,6 @@
 {
   "name": "lchao-cli",
-  "version": "1.0.49",
+  "version": "1.0.50",
   "description": "chao的脚手架",
   "main": "index.js",
   "type": "module",
