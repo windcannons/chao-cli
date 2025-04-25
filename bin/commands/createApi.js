@@ -1,278 +1,66 @@
-import {program} from 'commander';
 import fs from 'fs';
 import path from 'path';
-import degit from 'degit';
 import ora from 'ora'; // 引入 ora 进行 loading 效果
-import {execSync} from 'child_process'; // 引入 child_process 执行系统命令
-import inquirer from 'inquirer';
 import axios from 'axios'; // 引入 axios 用于请求 API 文档
+export default async function bindGit() {
+    const currentDir = process.cwd(); // 当前工作目录
+    const createApiDir = path.join(currentDir, 'createApi');
+    const indexJsonPath = path.join(createApiDir, 'index.json');
 
-// 创建项目指令
-program
-    .command('create')
-    .description('从线上仓库生成项目到当前目录（不包含 .git）')
-    .action(async () => {
-        const currentDir = process.cwd();
+    // 检查是否存在 src 文件夹
+    const srcDirPath = path.join(currentDir, 'src');
+    const hasSrcDir = await hasDirectory(srcDirPath)
 
-        // 检查当前目录是否为空
-        if (fs.readdirSync(currentDir).length > 0) {
-            console.error('当前目录不为空，请选择一个空目录或清空当前目录。');
-            return;
-        }
+    //是否为ts语法
+    const isTsSyntax = await hasTsFileInDir(currentDir);
 
-        // 选择框架
-        const { framework } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'framework',
-                message: '请选择项目框架:',
-                choices: ['Vue', 'Nuxt3', 'UniApp'],
-            }
-        ]);
+    const spinner = ora('正在生成 API 请求文件夹和文件，请稍候...').start();
 
-        let repoUrl = '';
-        switch (framework) {
-            case 'Vue':
-                repoUrl = 'https://github.com/windcannons/vue3Template.git';
-                break;
-            case 'Nuxt3':
-                repoUrl = 'https://github.com/windcannons/nuxt3Template.git';
-                break;
-            case 'UniApp':
-                repoUrl = 'https://github.com/windcannons/newUniTemplate.git';
-                break;
-            default:
-                console.error('未知框架');
-                return;
-        }
+    try {
+        // 确保 createApi 文件夹存在
+        fs.mkdirSync(createApiDir, { recursive: true });
 
-        const spinner = ora('正在生成项目，请稍候...').start();
+        let requestUrl;
+        let apiUrl;
 
-        try {
-            const emitter = degit(repoUrl, { cache: false, force: true });
-            await emitter.clone(currentDir);
-            spinner.succeed(`项目已成功生成到当前目录: ${currentDir}`);
-        } catch (err) {
-            spinner.fail('生成项目失败');
-            console.error('错误详情:', err);
-            console.error('请检查仓库地址是否正确，或尝试使用代理。');
-        }
-    });
+        // 检查 index.json 文件是否存在
+        if (fs.existsSync(indexJsonPath)) {
+            // 读取 index.json 文件
+            const indexJson = JSON.parse(fs.readFileSync(indexJsonPath, 'utf8'));
+            requestUrl = indexJson.requestUrl;
 
-
-
-// 切换 npm 镜像指令
-program
-    .command('set-npm')
-    .description('交互式切换 npm 镜像源（官方、淘宝、阿里）')
-    .action(async () => {
-        const { registry } = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'registry',
-                message: '请选择要切换的 npm 镜像源：',
-                choices: [
-                    { name: '官方源（https://registry.npmjs.org/）', value: 'official' },
-                    { name: '淘宝镜像（https://registry.npmmirror.com/）', value: 'taobao' },
-                    { name: '阿里云镜像（https://npm.aliyun.com/）', value: 'aliyun' }
-                ]
-            }
-        ]);
-
-        let url = '';
-
-        switch (registry) {
-            case 'official':
-                url = 'https://registry.npmjs.org/';
-                break;
-            case 'taobao':
-                url = 'https://registry.npmmirror.com/';
-                break;
-            case 'aliyun':
-                url = 'https://npm.aliyun.com/';
-                break;
-        }
-
-        const spinner = ora(`正在切换到 ${url} ...`).start();
-
-        try {
-            execSync(`npm config set registry ${url}`, { stdio: 'ignore' });
-            spinner.succeed(`npm 镜像已切换为：${url}`);
-        } catch (err) {
-            spinner.fail('镜像切换失败');
-            console.error('错误详情:', err);
-        }
-    });
-
-
-// 绑定线上仓库地址指令
-program
-    .command('bind git')
-    .description('绑定线上仓库地址到当前项目，并处理文件冲突')
-    .action(() => {
-        process.stdout.write('请输入线上仓库地址: ');
-        process.stdin.once('data', async (data) => {
-            const gitUrl = data.toString().trim();
-            if (!gitUrl) {
-                console.error('仓库地址不能为空');
-                process.stdin.pause();
-                return;
-            }
-
-            const spinner = ora('正在绑定仓库地址，请稍候...').start();
-            const currentDir = process.cwd();
-
-            try {
-                let isGitRepo = false;
-                try {
-                    execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
-                    isGitRepo = true;
-                } catch (err) {
-                    isGitRepo = false;
-                }
-
-                if (!isGitRepo) {
-                    spinner.text = '正在初始化新的 Git 仓库...';
-                    execSync('git init', { stdio: 'inherit' });
-                }
-
-                spinner.text = '正在设置远程仓库地址...';
-                try {
-                    execSync(`git remote set-url origin ${gitUrl}`, { stdio: 'inherit' });
-                } catch {
-                    execSync(`git remote add origin ${gitUrl}`, { stdio: 'inherit' });
-                }
-
-                const remoteOutput = execSync('git remote -v', { encoding: 'utf-8' });
-                if (!remoteOutput.includes(gitUrl)) {
-                    throw new Error('远程仓库地址绑定失败，请检查仓库地址是否正确。');
-                }
-
-                spinner.text = '正在拉取远程仓库的元数据...';
-                execSync('git fetch --all', { stdio: 'inherit' });
-
-                const remoteBranches = execSync('git branch -r', { encoding: 'utf-8' })
-                    .split('\n')
-                    .map(branch => branch.trim().replace('origin/', ''))
-                    .filter(branch => branch);
-
-                const defaultBranch = remoteBranches.includes('main') ? 'main' : 'master';
-
-                spinner.text = '正在检查文件冲突...';
-                const localFiles = fs.readdirSync(currentDir);
-                const remoteFiles = execSync(`git ls-tree --name-only -r origin/${defaultBranch}`, { encoding: 'utf-8' })
-                    .split('\n')
-                    .filter(f => f);
-
-                const conflicts = localFiles.filter(file => remoteFiles.includes(file));
-
-                if (conflicts.length > 0) {
-                    spinner.stop();
-                    console.log(`检测到文件冲突：${conflicts.join(', ')}`);
-
-                    const { choice } = await inquirer.prompt([
-                        {
-                            type: 'list',
-                            name: 'choice',
-                            message: '请选择如何解决冲突:',
-                            choices: [
-                                { name: '替换冲突的文件', value: 'yes' },
-                                { name: '保留本地文件', value: 'no' }
-                            ]
-                        }
-                    ]);
-
-                    if (choice === 'yes') {
-                        conflicts.forEach(file => {
-                            const filePath = path.join(currentDir, file);
-                            if (fs.lstatSync(filePath).isDirectory()) {
-                                fs.rmSync(filePath, { recursive: true, force: true });
-                            } else {
-                                fs.unlinkSync(filePath);
-                            }
-                        });
-                    } else {
-                        console.log('已选择保留本地文件，操作取消。');
-                        process.stdin.pause();
-                        return;
-                    }
-                }
-
-                spinner.start('正在拉取远程仓库的内容...');
-                execSync(`git pull origin ${defaultBranch}`, { stdio: 'inherit' });
-                spinner.succeed('仓库地址已成功绑定并更新');
-            } catch (err) {
-                spinner.fail('绑定仓库地址失败');
-                console.error('错误详情:', err.message);
-            } finally {
-                process.stdin.pause();
-            }
-        });
-    });
-
-// 创建 API 请求文件夹和文件指令
-program
-    .command('create-api')
-    .description('根据输入的请求地址生成 API 请求文件夹、文件以及 TypeScript 接口文档')
-    .action(async () => {
-        const currentDir = process.cwd(); // 当前工作目录
-        const createApiDir = path.join(currentDir, 'createApi');
-        const indexJsonPath = path.join(createApiDir, 'index.json');
-
-        // 检查是否存在 src 文件夹
-        const srcDirPath = path.join(currentDir, 'src');
-        const hasSrcDir = await hasDirectory(srcDirPath)
-
-        //是否为ts语法
-        const isTsSyntax = await hasTsFileInDir(currentDir);
-
-        const spinner = ora('正在生成 API 请求文件夹和文件，请稍候...').start();
-
-        try {
-            // 确保 createApi 文件夹存在
-            fs.mkdirSync(createApiDir, { recursive: true });
-
-            let requestUrl;
-            let apiUrl;
-
-            // 检查 index.json 文件是否存在
-            if (fs.existsSync(indexJsonPath)) {
-                // 读取 index.json 文件
-                const indexJson = JSON.parse(fs.readFileSync(indexJsonPath, 'utf8'));
-                requestUrl = indexJson.requestUrl;
-
-                if (!requestUrl || requestUrl.trim() === '') {
-                    throw new Error('请求地址为空，请先绑定请求地址');
-                }
-
-                apiUrl = `${requestUrl}`;
-            } else {
-                // 如果 index.json 文件不存在，生成默认的 index.json 文件
-                const defaultIndexJson = { requestUrl: '' };
-                fs.writeFileSync(indexJsonPath, JSON.stringify(defaultIndexJson, null, 2));
+            if (!requestUrl || requestUrl.trim() === '') {
                 throw new Error('请求地址为空，请先绑定请求地址');
             }
 
-            // 获取 API 数据
-            const response = await axios.get(apiUrl);
-            const apiData = response.data;
-            if (!apiData){
-                spinner.fail('requestUrl地址错误');
-                return
-            }
-
-            // 生成 TypeScript 接口文档
-            generateTsInterfaces(apiData, currentDir,hasSrcDir, isTsSyntax);
-
-            spinner.succeed('API 请求文件夹和文件已成功生成');
-        } catch (err) {
-            spinner.fail('生成 API 请求文件夹和文件失败');
-            console.error('错误详情:', err.message);
-            if (err.message.includes('请求地址为空')) {
-                console.error('请在 createApi/index.json 文件中绑定请求地址。');
-            }
+            apiUrl = `${requestUrl}`;
+        } else {
+            // 如果 index.json 文件不存在，生成默认的 index.json 文件
+            const defaultIndexJson = { requestUrl: '' };
+            fs.writeFileSync(indexJsonPath, JSON.stringify(defaultIndexJson, null, 2));
+            throw new Error('请求地址为空，请先绑定请求地址');
         }
-    });
+
+        // 获取 API 数据
+        const response = await axios.get(apiUrl);
+        const apiData = response.data;
+        if (!apiData){
+            spinner.fail('requestUrl地址错误');
+            return
+        }
+
+        // 生成 TypeScript 接口文档
+        generateTsInterfaces(apiData, currentDir,hasSrcDir, isTsSyntax);
+
+        spinner.succeed('API 请求文件夹和文件已成功生成');
+    } catch (err) {
+        spinner.fail('生成 API 请求文件夹和文件失败');
+        console.error('错误详情:', err.message);
+        if (err.message.includes('请求地址为空')) {
+            console.error('请在 createApi/index.json 文件中绑定请求地址。');
+        }
+    }
+}
 
 // 异步函数，用于检查目录中是否存在 .ts 文件
 async function hasTsFileInDir(dir) {
@@ -575,20 +363,3 @@ ${requestName}: (${extractVariablesAndFormatPath(path, item).jsDateString}) => {
     }
 
 }
-
-// 显示支持的指令列表
-program
-    .command('ls')
-    .description('显示当前支持的指令列表')
-    .action(() => {
-        console.log('指令列表:');
-        console.log('  lchao create - 生成新项目到当前目录');
-        console.log('  lchao clear  - 清理当前目录下的 node_modules 和 package-lock.json');
-        console.log('  lchao set-npm  - 切换 npm 镜像指令');
-        console.log('  lchao bind git - 绑定线上仓库地址到当前项目');
-        console.log('  lchao create-api - 生成 API 请求文件');
-        console.log('  lchao ls     - 显示当前支持的指令列表');
-    });
-
-// 解析命令行参数
-program.parse(process.argv);
