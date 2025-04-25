@@ -23,7 +23,7 @@ program
     .action(setNpm);
 
 program
-    .command('bind git')
+    .command('bind-git')
     .description('绑定线上仓库地址')
     .action(bindGit);
 

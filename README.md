@@ -69,7 +69,7 @@ lchao set-npm
 **指令：**
 
 ```bash
-lchao bind git
+lchao bind-git
 ```
 
 **描述：** 绑定线上仓库地址到当前项目，并处理文件冲突。
@@ -77,7 +77,7 @@ lchao bind git
 **使用示例：**
 
 ```bash
-lchao bind git
+lchao bind-git
 ```
 
 执行此命令后，你可以选择绑定远程 Git 仓库地址，方便后续的代码推送。
@@ -129,7 +129,7 @@ lchao ls
   lchao create - 从线上仓库生成项目到当前目录（不包含 .git）
   lchao clear  - 删除当前目录下的 node_modules 和 package-lock.json
   lchao set-npm  - 交互式切换 npm 镜像源
-  lchao bind git - 绑定线上仓库地址到当前项目
+  lchao bind-git - 绑定线上仓库地址到当前项目
   lchao create-api - 生成 API 请求结构和 TS 接口
   lchao ls     - 显示当前支持的指令列表
 ```
@@ -155,7 +155,7 @@ lchao ls
    使用 `lchao set-npm` 命令交互式选择需要使用的 npm 镜像源。
 
 5. **绑定 Git 仓库**  
-   使用 `lchao bind git` 将 Git 仓库与项目绑定。
+   使用 `lchao bind-git` 将 Git 仓库与项目绑定。
 
 6. **生成 API 请求文件**  
    使用 `lchao create-api` 生成 API 请求结构和接口文件。

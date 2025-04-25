@@ -1,6 +1,6 @@
 {
   "name": "lchao-cli",
-  "version": "1.0.54",
+  "version": "1.0.56",
   "description": "chao的脚手架",
   "main": "index.js",
   "type": "module",
@@ -8,8 +8,7 @@
     "lchao": "bin/cli.js"
   },
   "scripts": {
-    "link": "npm link",
-    "publish": "npm publish"
+    "link": "npm link"
   },
   "repository": {
     "type": "git",
