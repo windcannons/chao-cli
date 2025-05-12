@@ -236,7 +236,7 @@ ${requestName}: (${extractVariablesAndFormatPath(path, item).jsDateString}) => {
                                     if (method === 'get') {
                                         tsContent +=
                                             `  }) => {
-     return Request.${method}(\`${path}${"?${new URLSearchParams(data)}"}\`);
+     return Request.${method}(\`${path}${"?${new URLSearchParams(data as string)}"}\`);
   },
 
 `
